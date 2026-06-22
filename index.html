@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TikTok Live Simulator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #000000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Responsive Mobile Container Layout */
+        .app-container {
+            width: 100vw;
+            height: 100vh;
+            background-color: #000000;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Desktop testing wrapper fallback rule */
+        @media (min-width: 480px) {
+            .app-container {
+                width: 100%;
+                max-width: 420px;
+                height: 88vh;
+                min-height: 650px;
+                border-radius: 36px;
+                border: 8px solid #1a1a1a;
+                box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            }
+            body {
+                background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            }
+        }
+
+        /* Live Camera Background Elements */
+        .camera-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+        
+        /* Mirror effect applied only when using front camera */
+        .camera-bg.facing-user {
+            transform: scaleX(-1);
+        }
+
+        /* Top Bar: Creator Info styled after the left phone in image_2125eb.png */
+        .top-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 16px 8px 16px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
+            z-index: 10;
+            padding-top: calc(env(safe-area-inset-top, 16px) + 4px); /* Adapts automatically around phone notches */
+        }
+
+        .creator-badge {
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 4px 12px 4px 6px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .creator-avatar {
+            width: 28px;
+            height: 28px;
+            background-color: #fe2c55;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .creator-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .username {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .viewer-count {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .follow-btn {
+            background-color: #fe2c55;
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 14px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 4px;
+        }
+
+        .right-badges {
+            display: flex;
+            gap: 6px;
+        }
+
+        .tag-badge {
+            background-color: rgba(0, 0, 0, 0.4);
+            color: #fbd433;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* Transparent Floating Chat Container Window */
+        .stream-viewport {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding-bottom: 8px;
+            z-index: 5;
+        }
+
+        /* Shifted completely to the left and styled like TikTok */
+        .chat-container {
+            max-height: 240px;
+            width: 85%;
+            padding: 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            mask-image: linear-gradient(to top, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%);
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 0px;
+        }
+
+        /* Compact Layout: Stacking Username Over Text without PFP */
+        .chat-line {
+            display: flex;
+            flex-direction: column;
+            font-size: 12.5px;
+            animation: fadeIn 0.12s ease-out forwards;
+            text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
+        }
+
+        .chat-user {
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.65);
+            font-size: 11px;
+            margin-bottom: 1px;
+            letter-spacing: 0.3px;
+        }
+
+        .chat-msg {
+            color: #ffffff;
+            line-height: 1.35;
+            word-wrap: break-word;
+            font-weight: 500;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Bottom Comment Layout mirroring the left phone */
+        .input-bar {
+            padding: 12px 16px 16px 16px;
+            background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 10;
+            padding-bottom: calc(env(safe-area-inset-bottom, 16px) + 4px); /* Pushes keyboard/input area clear of phone bottom bars */
+        }
+
+        .comment-pill-wrapper {
+            width: 60%;
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 24px;
+            padding: 10px 16px;
+        }
+
+        .comment-pill-wrapper input {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            width: 100%;
+        }
+
+        .comment-pill-wrapper input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .gift-icons {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 24px;
+            cursor: pointer;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6));
+            transition: transform 0.1s;
+        }
+
+        .icon-btn:active {
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <video class="camera-bg facing-user" id="cameraBg" autoplay playsinline muted></video>
+
+        <div class="top-header">
+            <div class="creator-badge">
+                <div class="creator-avatar">L</div>
+                <div class="creator-info">
+                    <span class="username">Low_IQ_core</span>
+                    <span class="viewer-count" id="liveViewers">70.3k viewers</span>
+                </div>
+                <button class="follow-btn">Follow</button>
+            </div>
+            <div class="right-badges">
+                <div class="tag-badge">🔥 Top 1</div>
+            </div>
+        </div>
+
+        <div class="stream-viewport">
+            <div class="chat-container" id="chatContainer"></div>
+        </div>
+
+        <div class="input-bar">
+            <div class="comment-pill-wrapper">
+                <input type="text" placeholder="Add comment..." disabled>
+            </div>
+            <div class="gift-icons">
+                <button class="icon-btn">🎁</button>
+                <button class="icon-btn">🌹</button>
+                <button class="icon-btn" id="flipCamBtn">🔄</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA DICTIONARIES ---
+        const chatUsernames = [
+            "GamerX", "StreamSniper", "GlitchFace", "PixelLord", "VibeCheck99", 
+            "Shadow_Runs", "CyberPunk", "HyperDrive", "NeonKnight", "KappaClaus",
+            "ChillBeans", "ToxicAvenger", "PogChamp_69", "LootGoblin", "WkeySpammer",
+            "AuraMaxer", "SlayInChat", "VibeMaster", "SwiftPixel", "NovaStrike",
+            "EchoPulse", "RetroWave", "CosmicDrip", "FrostByte", "QuantumQ",
+            "BlazeGlitch", "MysticFlow", "ZenithZ", "ApexPredator", "LunaEclipse"
+        ];
+
+        const chatTemplates = [
+            // --- ORIGINAL RESPONSES ---
+            "Yo Matthew! What's good?", "stream is rendering perfectly today ngl", "bro what are you wearing lmao 💀",
+            "Sending good vibes for the stream today! ✨", "drop the playlist link expeditiously", "actually throwing, uninstall please",
+            "That play was clean, absolute cinema", "We eating good with this stream tonight", "Hello Matthew hope you are having a nice day",
+            "wait what did I miss? Just tapped in", "This gameplay is cooked. Absolutely cooked.", "Your layout looks so pretty today! 💜",
+            "can we get a W in the chat", "standard Matthew L tbh", "blaze it up, front row seats to greatness lets gooo",
+            "bro thinks he’s him 😭", "Incredible tracking right there!", "is it just me or is the audio kinda low?",
+            "Audio is fine for me, check your setup", "preview of a professional hardstuck player", "absolute textbook execution right there",
+            "This stream always clears my bad mood", "boring. play something else", "Love the energy today Matthew! 🔥",
+            "chat is moving so fast wtf", "peak entertainment right here", "bro is playing with his eyes closed surely",
+            "That overlay looks so sleek wow", "setup is looking highkey fire", "worst stream on the platform hands down",
+            "The comeback is going to be legendary", "bro got zero aura after that play", "you got this!! don't let the trolls get to you",
+            "valid strategy honestly", "my grandmother plays faster than this", "That was a massive brain move",
+            "bro is coping so hard right now", "Let's goooo! Big dubs only!", "wait is this live or a recording?",
+            "live chat, we here!", "missing every shot is crazy work", "Mod team is working overtime today bless them",
+            "loving the vibe so much! 🥰", "you need to adjust your sensitivity fr", "built different fr fr",
+            "drop the spec sheet for the PC again?", "imagine hating in the chat, couldn't be me", "bro is entirely washed, tragic to see",
+            "THAT WAS INSANE!!!", "stealth lurk activated 🥷", "unlocked a new fear watching that play lol",
+            "You're doing amazing sweetie! 🐝", "mid stream, checking out", "The framerate is buttery smooth today",
+            "stream schedule update when?", "bro is frozen in fear lmao", "Thank you for always streaming, love the content!",
+            "chat is under collective hypnosis right now", "L + ratio + fell off", "blast off! we reaching the milestone tonight!",
+            "midnight streams just hit different", "secure the bag Matthew!", "actual definition of a skill issue right here",
+            "So wholesome, love this community🌸", "wait what game is this?", "bro got deleted out of existence",
+            "that reaction time was crazy fast", "unban my boy please he did nothing wrong", "lowkey the best stream on twitch rn",
+            "pure garbage gameplay, I'm out", "This music is so relaxing", "we up right now!! 📈",
+            "bro is saltier than the dead sea", "Keep shining Matthew!", "clutch or kick let's see it",
+            "I'm literally falling asleep watching this", "massive W, we love to see it", "typing with one hand eating pizza, still better than you",
+            "This stream is pure comfort content", "wait for the drop...", "crying and throwing up over that loss",
+            "manipulation of the highest order, clean play", "highkey enjoying this right now", "system error: streamer brain not found",
+            "Hope everyone in chat is having a beautiful day!", "speedy recovery from that blunder", "definitely using aimbot and still missing lmao",
+            "been here since day one, love the growth!", "let's analyze the economic impact of that play", "who allowed this man to broadcast 💀",
+            "rizz level is off the charts today", "so cute! look at the chat go", "absolute chaos and I am here for it",
+            "GG, it's over, wrap it up", "We go again! Back to back wins let's get it", "everybody in chat needs to relax fr",
+            "grandpa needs to retire from gaming", "Such a peaceful stream tonight, thank you", "absolute peak performance",
+            "bro vanished from the scoreboard", "New meme format just dropped", "Matthew looking sharp today! 😍",
+            "actual circus going on in this stream", "commands aren't working for me", "vibe check passed with flying colors",
+            "bro is yapping so much today", "500 IQ play right there, nobody can convince me otherwise", "You'll get it next time, don't worry!",
+            "welcome to the hardstuck club Matthew", "This stream gives me so much life", "lag? or just bad?",
+            "love the background setup so much", "bro thinks he's the main character 😭", "literal gold content right here",
+            "PANIC MODE ACTIVATED", "mod team clean up aisle three please", "at least you tried, that's what counts!",
+            "unbothered. moisturized. happy. in my lane.", "actual garbage tier gameplay lmao", "taking a deep breath after that one",
+            "stream is completely cooking tonight", "my little brother plays better than this fr", "snacking on popcorn watching this drama",
+            "output looks beautiful today", "building a house with all them bricks you throwing", "lucky play but we take those",
+            "infinite aura points gained", "hurts to watch but I can't look away", "setup is looking spicy today Matthew",
+            "zero hype, dead stream, nothing to see here", "Absolutely floating after that victory!", "sharing one collective brain cell with chat right now",
+            "crying on stream is a crazy look", "proud of you son", "bro went into avatar state right there",
+            "absolute worst content on my feed today", "Such a chill atmosphere tonight", "slicing through the competition let's go",
+            "adding this clip to the cringe compilation", "The lighting is hitting perfectly right now", "processing that terrible play... error found",
+            "Take a break if you need water Matthew! Drink water!", "chat is absolutely rioting lmao", "cooked him to a crisp",
+            "don't listen to the haters, you're doing great", "skill check: FAILED ❌", "Love the community here, so welcoming",
+            "overlay drip is immaculate", "dude just delete the channel at this point", "absolutely electric energy right now!",
+            "wait did the stream just rewind or am I tripping", "You have the nicest smile Matthew!", "delete this stream immediately 🗑️",
+            "music selection is top tier today", "grind never stops, let's get it", "bro is typing paragraphs in chat chill out",
+            "smooth movement, absolutely locked in", "Hope you're having a wonderful evening!", "bro skipped the tutorial obviously",
+            "Literally my favorite streamer right now", "can you hear us? mic check?", "typing trash while being down points is wild",
+            "This stream makes me so happy after a long day", "alpha energy only in this chat 😤", "boooooring, do a giveaway or something",
+            "neon vibes, color palette of the stream is so aesthetic", "actual 4D chess player right here", "tragic ending to a beautiful run",
+            "Sending you lots of love and support!", "bro is thick-headed as a brick fr", "defending this chat with my life 🛡️",
+            "flawless victory incoming", "clown emoji stream right now", "Everything about this stream is perfect",
+            "we moving at hyperspeed now boyzzzz", "zero talent, pure luck stream", "visual effects are looking clean",
+            "Sweetheart you are doing a wonderful job, keep it up!", "haters are fuming in the comments right now", "ready for the main event",
+            "crown slipped, entirely washed", "perfect stream to fall asleep to (in a good way)", "Bro's aura is radiating through the screen",
+            "it's gg, pack it up boys", "rising from the ashes of that terrible play!", "chill vibes only, keep the chat positive guys, no negativity",
+            "dumpster fire of a stream and I love it", "Setting the gold standard for streaming", "streamer is experiencing major brain lag rn",
+            "You brighten up my day Matthew!", "that flank was actually nasty", "came here just to drop an L",
+            "nothing but immaculate vibes in here", "solid gameplay, ignore the chat backseat driving", "bro please stop yapping it’s so cringe",
+            "content is absolute liquid gold tonight", "We reached the peak of entertainment", "dude is mad because he lost a pixel game 💀",
+            "camera quality looks incredible today", "chat unlocked the secret final boss victory let's gooo!",
+
+            // --- INTEGRATED COMPLEMENTARY & POSITIVE INTERACTION LINE RESPONSES ---
+            "Your energy is unmatched today!", "This stream always puts me in a good mood.", "You have such a great laugh honestly.", 
+            "I’m so glad I stumbled across this stream.", "You’re looking great today!", "Always love the vibes in here.", 
+            "Hope you're having an amazing day so far!", "Thanks for being such a positive light.", "You deserve all the success coming your way.", 
+            "Honestly, you're one of my favorite creators.", "Such a wholesome community here.", "Your smile is so contagious!", 
+            "Always look forward to your streams after a long day.", "You have a heart of gold.", "This is my safe place on the internet.", 
+            "Appreciate you taking the time to stream today!", "You are genuinely so talented at this.", "Keep doing what you're doing, you're amazing.", 
+            "This stream deserves way more viewers.", "W stream as always.", "You always know exactly what to say to make people feel better.", 
+            "I can tell you put a lot of effort into this.", "Your streams are literally the highlight of my week.", "Sending nothing but positive vibes your way!", 
+            "You are so appreciated here.", "Thanks for always keeping it real.", "You have such a comforting voice.", 
+            "Honestly, you inspire me a lot.", "Best stream on the internet right now.", "Your positivity is so refreshing.", 
+            "Never fail to make me smile!", "Everyone in chat is so lucky to be here.", "You look so happy today, love to see it!", 
+            "This content is top tier.", "Love your shirt by the way!", "You’re such a genuinely nice person.", 
+            "Truly a masterpiece of a stream today.", "I always learn something cool from you.", "Your dedication is seriously impressive.", 
+            "Love how much you care about chat.", "You’re a legend!", "Keep shining, you're doing great.", 
+            "Love the background setup today.", "You have the absolute best community.", "So proud of how far you’ve come.", 
+            "You always make everyone feel welcome.", "Just wanted to say you're doing an incredible job.", "Can we get some appreciation for how hard they work?", 
+            "Your hair looks perfect today!", "Thank you for always being a safe space.", "You are so down to earth, I love it.", 
+            "This is the best community on the internet, hands down.", "You bring so much joy to people.", "Truly one of a kind.", 
+            "Always a 10/10 stream.", "Your laugh makes me laugh every single time.", "You’re so sweet!", 
+            "Appreciate the good vibes today.", "You’re a natural at this.", "This stream always passes by so fast because it's so fun.", 
+            "So glad I found your channel.", "You have a great vibe around you.", "You are doing phenomenal!", 
+            "This stream is pure comfort.", "Keep your head up, you're amazing!", "The world needs more people like you.", 
+            "Such a cozy stream today.", "You have a really nice presence.", "Thanks for making my day a little brighter.", 
+            "Absolute absolute W.", "You are crushing it today!", "Always love the stories you tell.", 
+            "You are just a gem of a human.", "This stream has the best energy.", "Love seeing you thrive!", 
+            "You make the internet a better place.", "Always so authentic and genuine.", "You have a spectacular personality.", 
+            "Big fan of your content!", "Thanks for always being so interactive with us.", "You look so radiant today!", 
+            "Genuinely look up to you a lot.", "Stream is hitting just right today.", "Thanks for always keeping us entertained.", 
+            "You’re a breath of fresh air.", "Everyone here loves you!", "Can't imagine a better way to spend my afternoon.", 
+            "You’re so wonderfully unique.", "Love the enthusiasm today!", "You always lift my spirits.", 
+            "Such a great stream atmosphere.", "You have a beautiful soul.", "Thanks for all that you do for us.", 
+            "You’re the best, seriously.", "Absolute gold standard of content.", "So happy to be here today.", 
+            "Love the positive mindset you have.", "You make streaming look so effortless.", "Your community is a reflection of how great you are.", 
+            "Always delivering the best streams.", "You have such a welcoming aura.", "Thanks for being you!", 
+            "You are genuinely such a cool person.", "So glad to be apart of this community.", "Your stream is like a warm hug.", 
+            "Honestly you make me want to be a better person.", "Love the stream layout today!", "You’re a rockstar.", 
+            "Never stop doing what you love.", "Your voice is so soothing to listen to.", "This stream is exactly what I needed today.", 
+            "You have the prettiest eyes!", "Such an inspiration to so many people.", "You’re doing fantastic, don't let anyone tell you otherwise.", 
+            "Love how humble you stay.", "You make everyone feel like a friend.", "Your happiness is infectious.", 
+            "This chat is so wholesome.", "Truly a blessing to have found this channel.", "You have an incredible sense of humor.", 
+            "Best part of my day, no contest.", "You’re such a vibe.", "Thanks for always being a positive influence.", 
+            "This stream is immaculate.", "You are so incredibly talented.", "Always look forward to seeing your face on my feed.", 
+            "Your energy is literally unmatched.", "You have the kindest heart.", "So glad you decided to go live today!", 
+            "Keep up the phenomenal work.", "You are so loved!", "Such a fantastic stream today.", 
+            "Love your perspective on things.", "You are an absolute joy to watch.", "Chat loves you so much!", 
+            "You have the coolest personality.", "Your stream always makes my day better.", "Thank you for the laughs!", 
+            "You look fantastic today.", "Absolute favorite creator right here.", "You’re doing amazing sweetie!", 
+            "Love how chill the stream is right now.", "You have such a wonderful presence.", "Thanks for being an awesome human.", 
+            "Truly a top tier streamer.", "Your laugh is music to my ears.", "So much love for this community.", 
+            "You’re a total star.", "Thanks for bringing us all together.", "You are doing a wonderful job.", 
+            "Always the best vibes in here.", "You look so sharp today!", "Genuinely appreciate your stream.", 
+            "You’re such a highlight in my life.", "Love the positive atmosphere.", "You are so charming!", 
+            "This stream is perfect.", "Thanks for sharing your time with us.", "You have the best smile.", 
+            "So proud to be a viewer.", "You’re a truly wonderful person.", "Love everything about this stream.", 
+            "You have a heart of pure gold.", "Thanks for the awesome entertainment.", "You are absolutely killing it!", 
+            "Always a pleasure watching you.", "You are so incredibly kind.", "Best stream on the platform.", 
+            "You make me so happy!", "Love the cozy vibes today.", "You are a treasure.", 
+            "Thanks for being so great to chat.", "You have the best energy ever.", "So incredibly glad I found you.", 
+            "You look phenomenal today!", "Keep being amazing.", "You are a literal angel.", 
+            "Thanks for making us laugh.", "You are doing so well!", "Love you to pieces!",
+
+            // --- INTEGRATED HATER / CRITICAL REACTION RESPONSES ---
+            "Why is the stream quality so bad today?", "Did you even try to get ready before going live?", "This is actually getting kind of boring.", 
+            "Bro, please fix your mic, it sounds terrible.", "Why do you always complain about everything?", "Your hair looks a bit messy today honestly.", 
+            "That take was absolutely awful.", "Can you talk about something else for once?", "The lighting makes you look completely washed out.", 
+            "Did you forget how to read chat?", "This is L content today.", "You look so tired, maybe take a nap.", 
+            "Why are you acting so weird right now?", "This stream has zero energy today.", "I liked your older streams way better.", 
+            "What are you even talking about?", "This stream is a complete mess right now.", "You're being kind of loud for no reason.", 
+            "Can we move on already?", "This is a massive L honestly.", "Your camera angle is so awkward.", 
+            "You look like you just rolled out of bed.", "This is getting hard to watch.", "Why are you repeating yourself so much?", 
+            "That background is so distracting and messy.", "You're completely missing the point.", "Chat is moving faster than your brain right now.", 
+            "This is definitely not your best stream.", "Why are you wearing that?", "This is incredibly cringe.", 
+            "You're being totally unreasonable right now.", "I don't think you know what that word means.", "Your audio is completely unbalanced.", 
+            "This is so basic.", "You look totally checked out today.", "That story made absolutely no sense.", 
+            "Can you stop checking your phone?", "This is painful to sit through.", "You’re completely ignoring half the chat.", 
+            "What an awful opinion.", "You need a coffee or something, you have zero vibe.", "Why is the camera so blurry?", 
+            "This stream is giving me a headache.", "You are completely misinformed on that.", "Please stop doing that laugh, it's so annoying.", 
+            "This is getting super repetitive.", "You look really annoyed today.", "That was a terrible joke.", 
+            "Why are you so distracted?", "This stream is entirely too chaotic.", "You're completely out of loop on this.", 
+            "This is a total trainwreck.", "Your setup looks so unorganized.", "You’re being way too sensitive about that.", 
+            "This conversation is going absolutely nowhere.", "You look completely lost.", "That was a rough take, not gonna lie.", 
+            "This is dragging on forever.", "Why are you being so defensive?", "Major L stream today.",
+
+            // --- INTEGRATED RANDOM CHAT FILLER OBSERVATIONS ---
+            "I had the best tacos for lunch today.", "It is absolutely pouring rain outside right now.", "Did anyone see that weird cloud earlier?", 
+            "I think I need to start drinking more water.", "Has anyone ever tried making their own pasta?", "I accidentally wore mismatched socks today.", 
+            "The moon looks really cool tonight.", "I really need to go grocery shopping after this.", "What's everyone's favorite season of the year?", 
+            "My cat has been staring at a wall for an hour.", "I think I left my car window open.", "Pineapple on pizza is actually delicious, don't care what anyone says.", 
+            "I really need to clean my room this weekend.", "Anyone have any good movie recommendations?", "I just learned that octopuses have three hearts.", 
+            "I’ve had the same song stuck in my head all morning.", "Coffee hits different on a Monday morning.", "I need to find a new hobby that doesn't involve screens.", 
+            "It's so hot today I feel like I'm melting.", "I just bought a new plant and I hope I don't kill it.", "Did you guys know that bananas are technically berries?", 
+            "I’m thinking about going for a walk later.", "My dog is currently snoring so loudly next to me.", "What is the best flavor of ice cream?", 
+            "I really need a vacation somewhere tropical.", "I hate when you open a bag of chips and it's mostly air.", "I found a random five dollar bill in my jacket pocket today.", 
+            "Anyone else love the smell of old books?", "I think my favorite color changes every week.", "I tried to bake bread today and it turned out like a brick.", 
+            "Just saw a bird flying upside down, it was wild.", "I need to buy a new pair of shoes soon.", "What's the weirdest food combo you actually enjoy?", 
+            "I can hear the crickets outside my window right now.", "I really want to visit Japan one day.", "I spent way too much time scrolling on social media today.", 
+            "The traffic on the way home was absolutely brutal.", "I think I might dye my hair a different color next month.", "Anyone else get super creative at 2 AM for no reason?", 
+            "I just finished reading a really great book.", "I need to start stretching more often.", "Honey never spoils, which is kind of crazy to think about.", 
+            "I’m currently eating cereal out of a mixing bowl.", "Does anyone actually understand how electricity works?", "I need a new water bottle that keeps things cold longer.", 
+            "I just saw the biggest dog I've ever seen in my life.", "I hate when you forget what you walked into a room for.", "I think autumn is definitely the best season for fashion.", 
+            "I really want to learn how to play the guitar.", "My favorite snack right now is grapes with lime juice.", "I forgot to take the chicken out of the freezer.", 
+            "Anyone else love listening to thunderstorm sounds to sleep?", "I’m trying to learn a new language but it’s so hard.", "I accidentally put my shirt on inside out today.", 
+            "Clouds look incredibly fluffy today.", "I really need to get my oil changed.", "What's the best time of day to go for a run?", 
+            "I just realized I haven't left the house in two days.", "I really love the smell of fresh cut grass.", "I need to find a good recipe for dinner tonight."
+        ];
+
+        const chatFillers = [" PogU!!!", " LFG!!!", " Hype!", " lmao", " KekW", " 🔥🔥🔥", " 💀💀💀", " monkaS", " NotLikeThis", " GIGACHAD"];
+
+        const chatContainer = document.getElementById('chatContainer');
+        const cameraBg = document.getElementById('cameraBg');
+        const viewerElement = document.getElementById('liveViewers');
+        const flipCamBtn = document.getElementById('flipCamBtn');
+        
+        let isUserScrolling = false;
+        let currentFacingMode = "user"; // Start with front camera
+        let currentStream = null;
+
+        // --- CAMERA HARDWARE ENGINE WITH FLIP TRACKING ---
+        async function setupCamera(facingMode) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: facingMode },
+                    audio: false
+                });
+                currentStream = stream;
+                cameraBg.srcObject = stream;
+                
+                if (facingMode === "user") {
+                    cameraBg.classList.add('facing-user');
+                } else {
+                    cameraBg.classList.remove('facing-user');
+                }
+            } catch (err) {
+                console.error("Camera access denied or hardware mode unavailable: ", err);
+            }
+        }
+        
+        setupCamera(currentFacingMode);
+
+        flipCamBtn.addEventListener('click', () => {
+            currentFacingMode = (currentFacingMode === "user") ? "environment" : "user";
+            setupCamera(currentFacingMode);
+        });
+
+        // Track user manual scrolling metrics
+        chatContainer.addEventListener('scroll', () => {
+            const distanceFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+            isUserScrolling = distanceFromBottom > 50; 
+        });
+
+        // --- CHAT ENGINE (4 MESSAGES PER SECOND) ---
+        function pushMessage() {
+            const user = chatUsernames[Math.floor(Math.random() * chatUsernames.length)];
+            const phrase = chatTemplates[Math.floor(Math.random() * chatTemplates.length)];
+            const filler = Math.random() > 0.4 ? chatFillers[Math.floor(Math.random() * chatFillers.length)] : "";
+
+            const line = document.createElement('div');
+            line.className = 'chat-line';
+
+            line.innerHTML = `
+                <span class="chat-user">${user}</span>
+                <span class="chat-msg">${phrase}${filler}</span>
+            `;
+            
+            chatContainer.appendChild(line);
+
+            if (chatContainer.children.length > 50) {
+                chatContainer.removeChild(chatContainer.firstChild);
+            }
+
+            if (!isUserScrolling) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        }
+        setInterval(pushMessage, 250);
+
+        // --- DYNAMIC VIEWER COUNT FLUCTUATION ---
+        let baseViewers = 70.3;
+        function fluctuateViewers() {
+            const shift = (Math.random() * 0.4) - 0.2; 
+            baseViewers = Math.max(65.0, Math.min(78.0, baseViewers + shift));
+            viewerElement.innerText = `${baseViewers.toFixed(1)}k viewers`;
+        }
+        setInterval(fluctuateViewers, 2500);
+
+        // --- BACKGROUND SPEECH RECOGNITION LOOP ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+            recognition.onend = () => { recognition.start(); };
+            recognition.start();
+        }
+    </script>
+</body>
+</html>
